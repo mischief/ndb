@@ -1,3 +1,5 @@
+// Package ndb implements the Network Database described in
+// http://plan9.bell-labs.com/magic/man2html/6/ndb.
 package ndb
 
 import (
@@ -13,7 +15,8 @@ import (
 )
 
 const (
-	ndblocal = "/lib/ndb/local"
+	// Default NDB file
+	NdbLocal = "/lib/ndb/local"
 )
 
 // A single database attribute=value tuple.
@@ -30,15 +33,11 @@ type NdbRecord struct {
 
 // Ndb possibly comprised of multiple files.
 type Ndb struct {
-	filename string
-
-	data *bytes.Reader
-
-	mtime time.Time
-
-	records []NdbRecord
-
-	next *Ndb
+	filename string        // NDB file name
+	data     *bytes.Reader // Raw data
+	mtime    time.Time     // Last modified time
+	records  []NdbRecord   // NDB Records
+	next     *Ndb          // Next in linked list
 }
 
 // Open an NDB database file.
@@ -47,7 +46,7 @@ func Open(fname string) (*Ndb, error) {
 	var err error
 
 	if fname == "" {
-		fname = ndblocal
+		fname = NdbLocal
 	}
 	db, err = openone(fname)
 	if err != nil {
@@ -88,44 +87,50 @@ func Open(fname string) (*Ndb, error) {
 
 // Open just one NDB file
 func openone(fname string) (*Ndb, error) {
-	ndb := &Ndb{filename: fname}
+	db := &Ndb{filename: fname}
 
-	if err := ndb.Reopen(); err != nil {
-		return nil, err
-	}
-
-	return ndb, nil
-}
-
-// Reopen NDB file.
-func (n *Ndb) Reopen() error {
-	//for db := n; db != nil; db = db.next {
-	db := n
-
+	// open file
 	f, err := os.Open(db.filename)
 
 	if err != nil {
-		return fmt.Errorf("reopen: %s", err)
+		return nil, fmt.Errorf("open: %s", err)
 	}
 
 	defer f.Close()
 
+	// read mtime
 	if fstat, err := f.Stat(); err != nil {
-		return fmt.Errorf("reopen: %s", err)
+		return nil, fmt.Errorf("open: %s", err)
 	} else {
 		db.mtime = fstat.ModTime()
 	}
 
+	// read all data
 	if data, err := ioutil.ReadAll(f); err != nil {
-		return fmt.Errorf("reopen: %s", err)
+		return nil, fmt.Errorf("open: %s", err)
 	} else {
 		db.data = bytes.NewReader(data)
 	}
 
+	// parse records
 	if db.records, err = parserec(db); err != nil {
-		return fmt.Errorf("reopen: %s", err)
+		return nil, fmt.Errorf("open: %s", err)
 	}
-	//}
+
+	return db, nil
+}
+
+// Reopen NDB file.
+func (n *Ndb) Reopen() error {
+	for db := n; db != nil; db = db.next {
+		if newdb, err := openone(db.filename); err != nil {
+			return err
+		} else {
+			db.data = newdb.data
+			db.mtime = newdb.mtime
+			db.records = newdb.records
+		}
+	}
 
 	return nil
 }

@@ -1,0 +1,9 @@
+ndb: Network Database
+===
+
+this is an implementation of ndb(6) from plan 9.
+
+see [ndbquery.go](cmd/ndbquery/ndbquery.go) for an example program.
+
+see [ndb(6)](http://plan9.bell-labs.com/magic/man2html/6/ndb) for more information.
+
