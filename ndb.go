@@ -21,14 +21,29 @@ const (
 
 // A single database attribute=value tuple.
 // The value may be empty.
-type NdbTuple struct {
+type Tuple struct {
 	Attr, Val string
 }
 
 // A NDB record, which may contain multiple tuples,
 // and may span multiple lines in the file.
-type NdbRecord struct {
-	Tuples []NdbTuple
+type Record []Tuple
+
+// RecordSet is a related group of records, from a single entry in ndb.
+type RecordSet []Record
+
+// Search a RecordSet for a given attribute and return the value.
+// Returns "" if not present.
+func (r RecordSet) Search(attr string) string {
+	for _, rec := range r {
+		for _, tuple := range rec {
+			if tuple.Attr == attr {
+				return tuple.Val
+			}
+		}
+	}
+
+	return ""
 }
 
 // Ndb possibly comprised of multiple files.
@@ -36,7 +51,7 @@ type Ndb struct {
 	filename string        // NDB file name
 	data     *bytes.Reader // Raw data
 	mtime    time.Time     // Last modified time
-	records  []NdbRecord   // NDB Records
+	records  RecordSet     // NDB Records
 	next     *Ndb          // Next in linked list
 }
 
@@ -59,7 +74,7 @@ func Open(fname string) (*Ndb, error) {
 	// open other db files
 	if dbrec := db.Search("database", ""); dbrec != nil {
 
-		for _, files := range dbrec[0].Tuples {
+		for _, files := range dbrec[0] {
 			if files.Attr == "file" {
 				if files.Val == fname {
 					if first.next == nil {
@@ -151,10 +166,10 @@ func (n *Ndb) Changed() (bool, error) {
 	return false, nil
 }
 
-// Search for a record with the given attr=val.
+// Search for a record set with the given attr=val.
 // Returns no records (nil) if not found.
-func (n *Ndb) Search(attr, val string) []NdbRecord {
-	var results []NdbRecord
+func (n *Ndb) Search(attr, val string) RecordSet {
+	var results RecordSet
 
 	// check each db file
 	for db := n; db != nil; db = db.next {
@@ -163,7 +178,7 @@ func (n *Ndb) Search(attr, val string) []NdbRecord {
 		for _, record := range db.records {
 
 			// each each tuple!
-			for _, tuple := range record.Tuples {
+			for _, tuple := range record {
 				// if val is "" we don't care what it is
 				if val == "" && tuple.Attr == attr {
 					results = append(results, record)
@@ -179,18 +194,18 @@ func (n *Ndb) Search(attr, val string) []NdbRecord {
 }
 
 // Parse whole ndb records from the ndb
-func parserec(n *Ndb) ([]NdbRecord, error) {
+func parserec(n *Ndb) (RecordSet, error) {
 	var err error
 
-	records := make([]NdbRecord, 1)
+	records := make(RecordSet, 1)
 
 	n.data.Seek(0, 0)
 
 	scanl := bufio.NewScanner(n.data)
 
-	var rec NdbRecord
+	var rec Record
 
-	for err == nil && scanl.Scan() {
+	for scanl.Scan() {
 		line := scanl.Text()
 
 		// skip empty lines
@@ -208,17 +223,24 @@ func parserec(n *Ndb) ([]NdbRecord, error) {
 		// not whitespace, begin a record
 		if !unicode.IsSpace(first) {
 			records = append(records, rec)
-			rec = NdbRecord{}
+			rec = Record{}
 		}
 
 		if tuples, terr := parsetuples(line); err != nil {
 			err = terr
 			break
 		} else {
-			rec.Tuples = append(rec.Tuples, tuples...)
+			rec = append(rec, tuples...)
 		}
 
 	}
+
+	if err := scanl.Err(); err != nil {
+		return nil, err
+	}
+
+	// make sure to get the last record.
+	records = append(records, rec)
 
 	return records, err
 }
@@ -263,12 +285,13 @@ func scanStrings(data []byte, atEOF bool) (advance int, token []byte, err error)
 // split up a string into ndb tuples.
 // parse "quoted strings" correctly, and
 // ignore comments at end of line
-func parsetuples(line string) ([]NdbTuple, error) {
-	tuples := make([]NdbTuple, 0)
+func parsetuples(line string) ([]Tuple, error) {
+	tuples := make([]Tuple, 0)
 
-	// chop off the comment
-	if idx := strings.Index(line, "#"); idx != -1 {
-		line = line[:idx]
+	// only chop comment if it is at the beginning of a line
+	// TODO: make comments work anywhere not in quotes
+	if line[0] == '#' {
+		return tuples, nil
 	}
 
 	scanw := bufio.NewScanner(strings.NewReader(line))
@@ -276,6 +299,7 @@ func parsetuples(line string) ([]NdbTuple, error) {
 
 	for scanw.Scan() {
 		tpstr := scanw.Text()
+		//fmt.Printf("tuple %q\n", tpstr)
 		spl := strings.SplitN(tpstr, "=", 2)
 
 		if len(spl) != 2 {
@@ -285,7 +309,7 @@ func parsetuples(line string) ([]NdbTuple, error) {
 		spl[1] = strings.TrimLeft(spl[1], `"`)
 		spl[1] = strings.TrimRight(spl[1], `"`)
 
-		tuples = append(tuples, NdbTuple{spl[0], spl[1]})
+		tuples = append(tuples, Tuple{spl[0], spl[1]})
 	}
 
 	return tuples, nil

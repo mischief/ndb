@@ -78,8 +78,10 @@ dom=10.in-addr.arpa soa=		# rfc1918 zones
 tcp=echo port=7
 tcp=http port=80
 tcp=https port=443
+tcp=invalid
 
 udp=echo port=7
 udp=domain port=53
 udp=dns port=53
 udp=syslog port=514
+

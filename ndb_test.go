@@ -14,20 +14,26 @@ type NdbParseTest struct {
 	line string
 
 	ntup   int
-	tuples []NdbTuple
+	tuples []Tuple
 }
 
 var (
 	parsetests = []NdbParseTest{
 		NdbParseTest{
-			line:   `ants=small cats=medium dogs="very large" aliens=`,
-			ntup:   4,
-			tuples: []NdbTuple{NdbTuple{"ants", "small"}},
+			line: `irc= host=irc.foo.org port=6697 ssl=true
+  nick=gordon user=gordon real=gordon
+  channels="#foo #bar"
+
+wtmp= file=/var/log/wtmp
+mailwatch= dir=/home/mischief/Maildir
+markov= order=2 nword=30 corpus=data/corpus`,
+			ntup:   16,
+			tuples: []Tuple{Tuple{"irc", ""}, Tuple{"host", "irc.foo.org"}},
 		},
 		NdbParseTest{
-			line:   `one=one # a comment`,
+			line:   `one=one`,
 			ntup:   1,
-			tuples: []NdbTuple{NdbTuple{"one", "one"}},
+			tuples: []Tuple{Tuple{"one", "one"}},
 		},
 	}
 )
@@ -79,7 +85,7 @@ func TestParseRecord(t *testing.T) {
 
 	for _, record := range rec {
 
-		for n, tuple := range record.Tuples {
+		for n, tuple := range record {
 			if n == 0 {
 				t.Logf("%+v", tuple)
 			} else {
@@ -123,9 +129,16 @@ func TestNdbSearch(t *testing.T) {
 	}
 
 	for _, rec := range recs {
-		t.Logf("record %+v:", rec.Tuples[0])
-		for _, tuple := range rec.Tuples {
+		t.Logf("record %+v:", rec[0])
+		for _, tuple := range rec[1:] {
 			t.Logf("  %+v", tuple)
 		}
+	}
+
+	attr = "udp"
+	recs = ndb.Search(attr, "syslog")
+
+	if syslog := recs.Search("port"); syslog != "514" {
+		t.Fatalf("expected 514, got %q", syslog)
 	}
 }

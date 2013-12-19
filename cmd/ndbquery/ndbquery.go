@@ -40,7 +40,7 @@ func main() {
 	case 2:
 		// print all attributes
 		for _, rec := range records {
-			for _, tuple := range rec.Tuples {
+			for _, tuple := range rec {
 				fmt.Printf("%s=%s ", tuple.Attr, tuple.Val)
 			}
 			fmt.Print("\n")
@@ -49,7 +49,7 @@ func main() {
 	case 3:
 		// only print rattr
 		for _, rec := range records {
-			for _, tuple := range rec.Tuples {
+			for _, tuple := range rec {
 				if tuple.Attr == flag.Arg(2) {
 					fmt.Printf("%s\n", tuple.Val)
 				}
