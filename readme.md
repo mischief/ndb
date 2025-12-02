@@ -7,5 +7,5 @@ see [ndb](http://godoc.org/github.com/mischief/ndb) for docs.
 
 see [ndbquery.go](cmd/ndbquery/ndbquery.go) for an example program.
 
-see [ndb(6)](http://plan9.bell-labs.com/magic/man2html/6/ndb) for more information.
+see [ndb(6)](https://9p.io/magic/man2html/6/ndb) for more information.
 
